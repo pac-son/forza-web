@@ -6,11 +6,15 @@ import ForzaContract from '@/abi/Forza.json';
 
 export default function VerificationPortal() {
   const [tokenId, setTokenId] = useState('');
+  // Consolidating all status and error tracking into one clean object
   const [status, setStatus] = useState({ loading: false, error: '' });
   const [certificateData, setCertificateData] = useState<any>(null);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!tokenId) return;
+
+    // Reset states before starting the new query
     setStatus({ loading: true, error: '' });
     setCertificateData(null);
 
@@ -26,6 +30,8 @@ export default function VerificationPortal() {
       // Call the verify function from Forza.sol
       const cert = await contract.verifyCertificate(tokenId);
 
+      // Populate the data regardless of whether it is valid or revoked. 
+      // The JSX at the bottom will automatically change colors based on cert.isValid!
       setCertificateData({
         studentName: cert.studentName,
         programme: cert.programme,
@@ -38,13 +44,21 @@ export default function VerificationPortal() {
       
       setStatus({ loading: false, error: '' });
 
-    } catch (error: any) {
-      console.error(error);
-      // Catch the specific revert error from the smart contract if it doesn't exist
-      setStatus({ 
-        loading: false, 
-        error: "Certificate Not Found. This Token ID does not exist on the registry." 
-      });
+    } catch (err: any) {
+      console.error(err);
+      
+      // Catch the specific revert error from the smart contract if it never existed
+      if (err.message && err.message.includes("does not exist")) {
+        setStatus({ 
+          loading: false, 
+          error: "Certificate Not Found. This Token ID has never been registered on this ledger." 
+        });
+      } else {
+        setStatus({ 
+          loading: false, 
+          error: "A network error occurred while querying the blockchain ledger." 
+        });
+      }
     }
   };
 
@@ -77,7 +91,7 @@ export default function VerificationPortal() {
             </button>
           </form>
 
-          {/* Error State: Not Found */}
+          {/* Error State: Completely Not Found */}
           {status.error && (
             <div className="mt-8 p-6 bg-red-50 border border-red-200 rounded-xl text-center">
               <span className="text-4xl block mb-2">❌</span>
@@ -86,7 +100,7 @@ export default function VerificationPortal() {
             </div>
           )}
 
-          {/* Success State: Display Record */}
+          {/* Record Found State: Display Authentic (Green) OR Revoked (Orange) */}
           {certificateData && (
             <div className={`mt-8 p-6 border rounded-xl ${certificateData.isValid ? 'bg-emerald-50 border-emerald-200' : 'bg-orange-50 border-orange-200'}`}>
               <div className="text-center mb-6">
@@ -101,15 +115,15 @@ export default function VerificationPortal() {
                 )}
               </div>
 
-              <div className="bg-white p-6 rounded-lg shadow-sm space-y-4">
+              <div className="bg-white p-6 rounded-lg shadow-sm space-y-4 opacity-90">
                 <div className="grid grid-cols-2 gap-4 border-b pb-4">
                   <div>
                     <p className="text-sm text-slate-500">Graduate Name</p>
-                    <p className="font-semibold text-lg">{certificateData.studentName}</p>
+                    <p className={`font-semibold text-lg ${!certificateData.isValid && 'line-through text-slate-400'}`}>{certificateData.studentName}</p>
                   </div>
                   <div>
                     <p className="text-sm text-slate-500">Programme</p>
-                    <p className="font-semibold text-lg">{certificateData.programme}</p>
+                    <p className={`font-semibold text-lg ${!certificateData.isValid && 'line-through text-slate-400'}`}>{certificateData.programme}</p>
                   </div>
                 </div>
                 

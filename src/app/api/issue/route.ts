@@ -59,20 +59,39 @@ export async function POST(request: Request) {
             graduationYear,
             ipfsCID
         );
+
         
+        // Wait for the block to be permanently mined
+
+        // 3. Parse the receipt logs to find the Transfer event or Mint event
+        // For a standard ERC-721, the first topic or event contains the Token ID
         // Wait for the block to be permanently mined
         const receipt = await tx.wait();
 
-        // 5. Update the Neon Database to confirm it was successfully minted
-        // (Using 'eq' from drizzle-orm if you want to be strict, but raw updates work too)
-        // Note: For a quick pilot, this simple update structure is fine
-        // If it throws a TS error on your end, we can import `eq` from drizzle-orm
-        
+        // Parse the transaction logs to find the exact Token ID that was minted
+        let tokenId = "0"; // Default fallback
+        if (receipt.logs) {
+            for (const log of receipt.logs) {
+                try {
+                    const parsedLog = contract.interface.parseLog(log);
+                    // The standard ERC-721 Transfer event: Transfer(from, to, tokenId)
+                    if (parsedLog && parsedLog.name === 'Transfer') {
+                        tokenId = parsedLog.args[2].toString();
+                        break;
+                    }
+                } catch (e) {
+                    // Ignore logs that don't belong to our contract interface
+                    continue; 
+                }
+            }
+        }
+
         return NextResponse.json({ 
             success: true, 
             message: "Success! Wallet secured and NFT Certificate minted on-chain.",
             studentAddress: wallet.address,
-            transactionHash: receipt.hash 
+            transactionHash: receipt.hash,
+            tokenId: tokenId // 👈 We are now sending the ID back to the browser!
         }, { status: 201 });
 
     } catch (error) {
